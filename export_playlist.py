@@ -12,7 +12,6 @@ from tqdm import tqdm
 
 from pytube import YouTube
 from moviepy.editor import *
-import ffmpeg
 
 
 class SpotifyFetcher:
@@ -74,11 +73,10 @@ class YoutubeDownloader:
         self.driver = d
         self.songs = songs
         self.songs_to_download = []
-        self.destination = os.path.join(rf"C:\Users\alper\Music", name)
-        os.makedirs(self.destination, exist_ok=True)
+        self.playlist_name = name
 
     def get_songs_to_download(self):
-        for song in tqdm(self.songs, desc="Fetching YouTube links"):
+        for song in tqdm(list(filter(lambda s: not os.path.exists(get_path(*s, self.playlist_name)), self.songs)), desc="Fetching YouTube links"):
             link = self.get_song_link(song)
             self.songs_to_download.append((*song, link))
 
@@ -101,16 +99,23 @@ class YoutubeDownloader:
             self.download_song(name, artist, link)
 
     def download_song(self, name: str, artist: str, link: str):
-        filename = f"{name} - {artist}.mp3"
-        path = os.path.join(self.destination, filename)
+        path = get_path(name, artist, self.playlist_name)
         self.download_youtube_song(link, path)
 
     def download_youtube_song(self, url, output_path):
+        if os.path.exists(output_path):
+            return
         folder = os.path.dirname(output_path)
         temp_video_path = os.path.join(folder, 'temp_video.mp4')
         yt = YouTube(url)
         # Download the video
-        yt.streams.first().download(output_path=folder, filename='temp_video.mp4')
+        try:
+            yt.streams.first().download(output_path=folder, filename='temp_video.mp4')
+        except:
+            with open("failed.txt", "a") as f:
+                f.write(f"{url},{output_path}\n")
+            print(f"Failed to download {url}")
+            return
         # Load the video file
         video = VideoFileClip(temp_video_path)
         # Extract audio from the video
@@ -122,6 +127,16 @@ class YoutubeDownloader:
         audio.close()
         # Delete the temporary video file
         os.remove(temp_video_path)
+
+
+def get_path(name: str, artist: str, playlist_name: str) -> str:
+    destination = os.path.join(rf"C:\Users\alper\Music", playlist_name)
+    os.makedirs(destination, exist_ok=True)
+    not_allowed = ["<", ">", ":", "\"", "/", "\\", "|", "?", "*"]
+    filename = f"{name} - {artist}.mp3"
+    for char in not_allowed:
+        filename = filename.replace(char, "")
+    return os.path.join(destination, filename)
 
 
 def main(playlist_link: str):
