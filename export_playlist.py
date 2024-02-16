@@ -13,6 +13,20 @@ from tqdm import tqdm
 from pytube import YouTube
 from moviepy.editor import *
 
+import eyed3
+
+
+class Song:
+    def __init__(self, name: str, artist: str, album: str, track_num: int, link: str):
+        self.name = name
+        self.artist = artist
+        self.album = album
+        self.track_num = track_num
+        self.link = link
+
+    def __hash__(self):
+        return hash(self.track_num)
+
 
 class SpotifyFetcher:
     def __init__(self, link: str, d):
@@ -43,15 +57,21 @@ class SpotifyFetcher:
             soup = BeautifulSoup(self.driver.page_source, 'html.parser')
             for track_row in soup.find_all("div", {"data-testid": "tracklist-row"}):
                 try:
+                    track_num_div = track_row.find("div", {"aria-colindex": "1"})
                     name_artist_div = track_row.find("div", {"aria-colindex": "2"}).find("div")
+                    album_div = track_row.find("div", {"aria-colindex": "3"})
                 except AttributeError:
                     break
                 name = name_artist_div.find("div", {"dir": "auto"}).text
                 artist = name_artist_div.find("a", {"dir": "auto"}).text
-                songs.add((name, artist))
+                album = album_div.find("a", {"dir": "auto"}).text
+                track_num = int(track_num_div.find("span", {"data-encore-id": "text"}).text)
+
+                if track_num > len(songs):
+                    songs.add(Song(name, artist, album, track_num, ""))
             new_song_count = len(songs) - prev_song_count
             pbar.update(new_song_count)
-            self.driver.execute_script("arguments[0].scrollBy(0, 500);", grid)
+            self.driver.execute_script("arguments[0].scrollBy(0, 300);", grid)
             time.sleep(0.5)
 
             if not new_song_count:
@@ -59,7 +79,7 @@ class SpotifyFetcher:
 
         self.songs = list(songs)
 
-    def get_songs(self) -> list[tuple[str, str]]:
+    def get_songs(self) -> list[Song]:
         return self.songs
 
     def get_playlist_name(self) -> str:
@@ -67,21 +87,19 @@ class SpotifyFetcher:
 
 
 class YoutubeDownloader:
-    def __init__(self, songs: list[tuple[str, str]], d, name):
+    def __init__(self, songs: list[Song], d, name):
         self.driver = d
         self.songs = songs
-        self.songs_to_download = []
         self.playlist_name = name
 
     def get_songs_to_download(self):
-        for song in tqdm(list(filter(lambda s: not os.path.exists(get_path(*s, self.playlist_name)), self.songs)), desc="Fetching YouTube links"):
+        for song in tqdm(list(filter(lambda s: not os.path.exists(get_path(s.name, s.artist, self.playlist_name)), self.songs)), desc="Fetching YouTube links"):
             link = self.get_song_link(song)
-            self.songs_to_download.append((*song, link))
+            song.link = link
 
-    def get_song_link(self, song: tuple[str, str]) -> str:
+    def get_song_link(self, song: Song) -> str:
         base_url = "https://www.youtube.com/results?search_query="
-        name, artist = song
-        search_term = f"{name} - {artist}"
+        search_term = f"{song.name} - {song.artist}"
         url = base_url + search_term.replace(" ", "+")
         self.driver.get(url)
         wait = WebDriverWait(self.driver, 15)
@@ -92,13 +110,13 @@ class YoutubeDownloader:
         return video_base_url + first_result["href"]
 
     def download_songs(self):
-        for song_link in tqdm(self.songs_to_download, desc="Downloading songs"):
-            name, artist, link = song_link
-            self.download_song(name, artist, link)
+        for song in tqdm(self.songs, desc="Downloading songs"):
+            self.download_song(song)
 
-    def download_song(self, name: str, artist: str, link: str):
-        path = get_path(name, artist, self.playlist_name)
-        self.download_youtube_song(link, path)
+    def download_song(self, song: Song):
+        path = get_path(song.name, song.artist, self.playlist_name)
+        self.download_youtube_song(song.link, path)
+        self.set_song_metadata(path, song)
 
     def download_youtube_song(self, url, output_path):
         if os.path.exists(output_path):
@@ -125,6 +143,19 @@ class YoutubeDownloader:
         audio.close()
         # Delete the temporary video file
         os.remove(temp_video_path)
+
+    def set_song_metadata(self, path: str, song: Song):
+        audiofile = eyed3.load(path)
+        if audiofile.tag is not None:
+            if song.name:
+                audiofile.tag.title = song.name
+            if song.artist:
+                audiofile.tag.artist = song.artist
+            if song.album:
+                audiofile.tag.album = song.album
+            if song.track_num:
+                audiofile.tag.track_num = song.track_num
+            audiofile.tag.save()
 
 
 def get_path(name: str, artist: str, playlist_name: str) -> str:
