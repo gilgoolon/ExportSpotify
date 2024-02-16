@@ -41,8 +41,6 @@ class SpotifyFetcher:
         while True:
             prev_song_count = len(songs)
             soup = BeautifulSoup(self.driver.page_source, 'html.parser')
-            with open("playlist.html", "w", encoding="utf-8") as f:
-                f.write(soup.prettify())
             for track_row in soup.find_all("div", {"data-testid": "tracklist-row"}):
                 try:
                     name_artist_div = track_row.find("div", {"aria-colindex": "2"}).find("div")
