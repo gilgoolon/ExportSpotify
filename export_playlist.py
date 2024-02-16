@@ -98,12 +98,19 @@ class YoutubeDownloader:
             song.link = link
 
     def get_song_link(self, song: Song) -> str:
+        self.driver.set_page_load_timeout(15)
         base_url = "https://www.youtube.com/results?search_query="
         search_term = f"{song.name} - {song.artist}"
         url = base_url + search_term.replace(" ", "+")
-        self.driver.get(url)
-        wait = WebDriverWait(self.driver, 15)
-        wait.until(expected_conditions.presence_of_element_located((By.ID, "video-title")))
+        try:
+            self.driver.get(url)
+            wait = WebDriverWait(self.driver, 15)
+            wait.until(expected_conditions.presence_of_element_located((By.ID, "video-title")))
+        except:
+            with open("failed.txt", "a") as f:
+                f.write(f"{song.name} - {song.artist}\n")
+            print(f"Failed to find {song.name} - {song.artist}")
+            return ""
         soup = BeautifulSoup(self.driver.page_source, 'html.parser')
         first_result = soup.find("a", {"id": "video-title"})
         video_base_url = "https://www.youtube.com"
@@ -111,12 +118,14 @@ class YoutubeDownloader:
 
     def download_songs(self):
         for song in tqdm(self.songs, desc="Downloading songs"):
-            self.download_song(song)
+            if song.link:
+                self.download_song(song)
 
     def download_song(self, song: Song):
         path = get_path(song.name, song.artist, self.playlist_name)
-        self.download_youtube_song(song.link, path)
-        self.set_song_metadata(path, song)
+        success = self.download_youtube_song(song.link, path)
+        if success:
+            self.set_song_metadata(path, song)
 
     def download_youtube_song(self, url, output_path):
         if os.path.exists(output_path):
@@ -131,7 +140,7 @@ class YoutubeDownloader:
             with open("failed.txt", "a") as f:
                 f.write(f"{url},{output_path}\n")
             print(f"Failed to download {url}")
-            return
+            return False
         # Load the video file
         video = VideoFileClip(temp_video_path)
         # Extract audio from the video
@@ -143,6 +152,7 @@ class YoutubeDownloader:
         audio.close()
         # Delete the temporary video file
         os.remove(temp_video_path)
+        return True
 
     def set_song_metadata(self, path: str, song: Song):
         audiofile = eyed3.load(path)
