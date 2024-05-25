@@ -41,9 +41,9 @@ class SpotifyFetcher:
         self.driver.get(self.playlist_link)
 
         wait = WebDriverWait(self.driver, 15)
-        main_view_container = wait.until(expected_conditions.presence_of_element_located((By.CLASS_NAME, 'main-view'
-                                                                                                         '-container')))
-        grid = main_view_container.find_element(By.CLASS_NAME, "os-viewport-native-scrollbars-invisible")
+        onetrust_close_btn = wait.until(expected_conditions.presence_of_element_located((By.CLASS_NAME, 'onetrust-close-btn-handler')))
+        onetrust_close_btn.click()
+        js_scroll = "document.querySelectorAll('[data-overlayscrollbars-viewport=\"scrollbarHidden overflowXHidden overflowYScroll\"]')[1].scrollBy(0, 300)"
         time.sleep(1)
 
         soup = BeautifulSoup(self.driver.page_source, 'html.parser')
@@ -71,7 +71,7 @@ class SpotifyFetcher:
                     songs.add(Song(name, artist, album, track_num, ""))
             new_song_count = len(songs) - prev_song_count
             pbar.update(new_song_count)
-            self.driver.execute_script("arguments[0].scrollBy(0, 300);", grid)
+            self.driver.execute_script(js_scroll)
             time.sleep(0.5)
 
             if not new_song_count:
@@ -182,9 +182,10 @@ def main(playlist_link: str):
     user_data_dir = r"C:\Users\alper\AppData\Local\Google\Chrome\User Data"
 
     chrome_options = webdriver.ChromeOptions()
-    chrome_options.add_argument("--headless")
+    # chrome_options.add_argument("--headless")
     chrome_options.add_argument("--silent")
-    chrome_options.add_argument(f"user-data-dir={user_data_dir}")
+    # chrome_options.add_argument(f"--user-data-dir={user_data_dir}")
+    # chrome_options.add_argument(f"--profile-directory=Default")
     driver = webdriver.Chrome(
         'C:/Program Files/ChromeDriver/chromedriver.exe', options=chrome_options
     )
