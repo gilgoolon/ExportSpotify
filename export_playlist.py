@@ -182,7 +182,7 @@ def main(playlist_link: str):
     user_data_dir = r"C:\Users\alper\AppData\Local\Google\Chrome\User Data"
 
     chrome_options = webdriver.ChromeOptions()
-    # chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--headless")
     chrome_options.add_argument("--silent")
     # chrome_options.add_argument(f"--user-data-dir={user_data_dir}")
     # chrome_options.add_argument(f"--profile-directory=Default")
